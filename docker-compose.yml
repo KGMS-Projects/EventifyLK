@@ -1,0 +1,119 @@
+version: "3.9"
+
+services:
+  # ─── Infrastructure ───────────────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    container_name: eventsphere-postgres
+    environment:
+      POSTGRES_USER: eventsphere
+      POSTGRES_PASSWORD: eventsphere_dev
+      POSTGRES_DB: eventsphere
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./infrastructure/init.sql:/docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U eventsphere"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: eventsphere-redis
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    container_name: eventsphere-rabbitmq
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    environment:
+      RABBITMQ_DEFAULT_USER: eventsphere
+      RABBITMQ_DEFAULT_PASS: eventsphere_dev
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "check_running"]
+      interval: 10s
+      timeout: 10s
+      retries: 5
+
+  # ─── Backend Services ─────────────────────────────────────
+  identity-service:
+    build:
+      context: ./services/identity
+      dockerfile: Dockerfile
+    container_name: eventsphere-identity
+    ports:
+      - "8001:8000"
+    environment:
+      DATABASE_URL: postgresql+asyncpg://eventsphere:eventsphere_dev@postgres:5432/eventsphere
+      REDIS_URL: redis://redis:6379/0
+      JWT_SECRET: eventsphere-jwt-secret-dev-only
+      JWT_ALGORITHM: HS256
+      JWT_EXPIRATION_MINUTES: 1440
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  vendor-service:
+    build:
+      context: ./services/vendor
+      dockerfile: Dockerfile
+    container_name: eventsphere-vendor
+    ports:
+      - "8002:8000"
+    environment:
+      DATABASE_URL: postgresql+asyncpg://eventsphere:eventsphere_dev@postgres:5432/eventsphere
+      REDIS_URL: redis://redis:6379/1
+      IDENTITY_SERVICE_URL: http://identity-service:8000
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  event-service:
+    build:
+      context: ./services/event
+      dockerfile: Dockerfile
+    container_name: eventsphere-event
+    ports:
+      - "8003:8000"
+    environment:
+      DATABASE_URL: postgresql+asyncpg://eventsphere:eventsphere_dev@postgres:5432/eventsphere
+      REDIS_URL: redis://redis:6379/2
+      IDENTITY_SERVICE_URL: http://identity-service:8000
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  booking-service:
+    build:
+      context: ./services/booking
+      dockerfile: Dockerfile
+    container_name: eventsphere-booking
+    ports:
+      - "8004:8000"
+    environment:
+      DATABASE_URL: postgresql+asyncpg://eventsphere:eventsphere_dev@postgres:5432/eventsphere
+      REDIS_URL: redis://redis:6379/3
+      RABBITMQ_URL: amqp://eventsphere:eventsphere_dev@rabbitmq:5672/
+      IDENTITY_SERVICE_URL: http://identity-service:8000
+      VENDOR_SERVICE_URL: http://vendor-service:8000
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+
+volumes:
+  postgres_data:
