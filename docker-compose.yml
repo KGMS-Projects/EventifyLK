@@ -115,5 +115,20 @@ services:
       rabbitmq:
         condition: service_healthy
 
+  # ─── Frontend Web Application ─────────────────────────────
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: eventsphere-frontend
+    ports:
+      - "3000:3000"
+    depends_on:
+      - identity-service
+      - vendor-service
+      - event-service
+      - booking-service
+
 volumes:
   postgres_data:
+

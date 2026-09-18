@@ -1,0 +1,15 @@
+{
+  "name": "eventifylk",
+  "version": "1.0.0",
+  "private": true,
+  "description": "EventifyLK - Full Stack Event Management and Vendor Booking Platform",
+  "scripts": {
+    "dev": "npm --prefix frontend run dev",
+    "build": "npm --prefix frontend run build",
+    "preview": "npm --prefix frontend run preview",
+    "install:all": "npm --prefix frontend install"
+  },
+  "keywords": ["eventify", "eventsphere", "react", "fastapi"],
+  "author": "",
+  "license": "ISC"
+}
